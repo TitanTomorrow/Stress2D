@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Stress2D</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M3 20 L12 4 L21 20 Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7.5 20 L12 12 L16.5 20" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".6"/></svg>
+      <span>Stress2D</span>
+    </div>
+    <label class="field-inline">
+      <span>Part</span>
+      <select id="preset"></select>
+    </label>
+    <div class="seg" id="tools" role="radiogroup" aria-label="Tool">
+      <button data-tool="select" class="on" title="Select edges, corners and holes; drag to move (V)">Select</button>
+      <button data-tool="outline" title="Click corners to draw a new outline (O)">Draw outline</button>
+      <button data-tool="hole" title="Click to place a hole, or drag to size it (H)">Add hole</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="file-actions">
+      <button id="undo" class="ghost" title="Undo (Ctrl+Z)">Undo</button>
+      <button id="redo" class="ghost" title="Redo (Ctrl+Y)">Redo</button>
+      <button id="save" class="ghost" title="Save the model as a JSON file">Save</button>
+      <button id="open" class="ghost" title="Open a saved model">Open</button>
+      <button id="png" class="ghost" title="Download the view as a PNG image">Image</button>
+      <input type="file" id="openFile" accept=".json,application/json" hidden />
+    </div>
+    <label class="check"><input type="checkbox" id="autoSolve" checked /> Auto-solve</label>
+    <button id="solve" class="primary">Solve</button>
+  </header>
+
+  <main class="layout">
+    <aside class="panel left">
+      <section>
+        <h2 id="inspTitle">Model</h2>
+        <div id="inspector"></div>
+      </section>
+      <section>
+        <h2>Material</h2>
+        <label class="row"><span>Material</span><select id="matPreset"></select></label>
+        <label class="row"><span>Young's modulus E</span><span class="unit-in"><input type="number" id="matE" step="any" /><em>MPa</em></span></label>
+        <label class="row"><span>Poisson's ratio ν</span><span class="unit-in"><input type="number" id="matNu" step="0.01" min="0" max="0.49" /><em></em></span></label>
+        <label class="row"><span>Yield strength</span><span class="unit-in"><input type="number" id="matYield" step="any" /><em>MPa</em></span></label>
+        <label class="row"><span>Thickness</span><span class="unit-in"><input type="number" id="matT" step="any" /><em>mm</em></span></label>
+        <div class="row">
+          <span>Analysis</span>
+          <div class="seg small" id="matMode">
+            <button data-mode="stress" class="on" title="Thin plate: no stress through the thickness">Plane stress</button>
+            <button data-mode="strain" title="Thick body: no strain through the thickness">Plane strain</button>
+          </div>
+        </div>
+      </section>
+      <section>
+        <h2>Mesh</h2>
+        <label class="row"><span>Density</span>
+          <select id="meshDensity">
+            <option value="coarse">Coarse</option>
+            <option value="medium" selected>Medium</option>
+            <option value="fine">Fine</option>
+            <option value="veryfine">Very fine</option>
+          </select>
+        </label>
+        <p class="muted" id="meshInfo">—</p>
+      </section>
+    </aside>
+
+    <div class="stage" id="stage">
+      <canvas id="canvas"></canvas>
+      <div class="legend" id="legend" hidden></div>
+      <div class="probe" id="probe" hidden></div>
+      <div class="view-btns">
+        <button id="zoomIn" title="Zoom in">+</button>
+        <button id="zoomOut" title="Zoom out">−</button>
+        <button id="fit" title="Fit to view (F)">Fit</button>
+      </div>
+      <div class="hint" id="hint"></div>
+      <div class="toast" id="toast" hidden></div>
+      <div class="busy" id="busy" hidden><span class="spinner"></span>Solving…</div>
+    </div>
+
+    <aside class="panel right">
+      <section>
+        <h2>Results</h2>
+        <div id="summary" class="summary"><p class="muted">Set supports and loads, then solve.</p></div>
+      </section>
+      <section>
+        <h2>Display</h2>
+        <label class="row"><span>Show</span>
+          <select id="field">
+            <option value="vm">Von Mises stress</option>
+            <option value="s1">Max principal σ₁</option>
+            <option value="s2">Min principal σ₂</option>
+            <option value="tmax">Max shear stress</option>
+            <option value="sx">Normal stress σx</option>
+            <option value="sy">Normal stress σy</option>
+            <option value="txy">Shear stress τxy</option>
+            <option value="umag">Displacement |u|</option>
+            <option value="ux">Displacement ux</option>
+            <option value="uy">Displacement uy</option>
+          </select>
+        </label>
+        <label class="row"><span>Colour bands <b id="bandsVal">12</b></span><input type="range" id="bands" min="4" max="32" value="12" /></label>
+        <label class="row"><span>Deformation <b id="deformVal">auto</b></span><input type="range" id="deform" min="0" max="100" value="50" /></label>
+        <div class="row">
+          <span>Stress values</span>
+          <div class="seg small" id="smooth">
+            <button data-smooth="nodal" class="on" title="Smooth field recovered at the nodes">Smoothed</button>
+            <button data-smooth="elem" title="Raw constant value per element">Per element</button>
+          </div>
+        </div>
+        <label class="check"><input type="checkbox" id="showMesh" /> Show mesh</label>
+        <label class="check"><input type="checkbox" id="showUndeformed" checked /> Show undeformed outline</label>
+        <label class="check"><input type="checkbox" id="showBC" checked /> Show supports and loads</label>
+      </section>
+      <section class="about">
+        <h2>About the analysis</h2>
+        <p class="muted">Linear-elastic finite elements (3-node triangles) with patch-recovered nodal stresses. Units: mm, N, MPa.
+          Stresses at sharp inside corners and at the ends of fixed edges are theoretical singularities: they keep rising as the mesh is refined, so judge the part by stresses away from those points or add a fillet.</p>
+      </section>
+    </aside>
+  </main>
+
+  <script src="js/geometry.js"></script>
+  <script src="js/mesh.js"></script>
+  <script src="js/fem.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
